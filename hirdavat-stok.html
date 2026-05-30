@@ -233,11 +233,15 @@ const ORNEK = [
   {id:"5",barkod:"8690504005013",ad:"Kombine Anahtar Seti",kategori:"El Aletleri",birim:"set",fiyat:340,stok:6,minStok:3,aciklama:"8-19mm, 8 parça"},
 ];
 
+// ─── Firebase ────────────────────────────────────────────────────────────────
+const FB_URL = "https://bogazicihirdavat-4b8c8-default-rtdb.firebaseio.com";
+async function fbOku(yol){try{const r=await fetch(FB_URL+"/"+yol+".json");return await r.json();}catch{return null;}}
+async function fbYaz(yol,veri){try{await fetch(FB_URL+"/"+yol+".json",{method:"PUT",body:JSON.stringify(veri)});}catch(e){}}
 function loadUrunler(){try{return JSON.parse(localStorage.getItem("hpro_urunler")||"null")||ORNEK}catch{return ORNEK}}
 function loadSatislar(){try{return JSON.parse(localStorage.getItem("hpro_satislar")||"[]")}catch{return[]}}
-function saveUrunler(){localStorage.setItem("hpro_urunler",JSON.stringify(urunler))}
-function saveSatislar(){localStorage.setItem("hpro_satislar",JSON.stringify(satislar))}
-
+function saveUrunler(){localStorage.setItem("hpro_urunler",JSON.stringify(urunler));fbYaz("urunler",urunler);}
+function saveSatislar(){localStorage.setItem("hpro_satislar",JSON.stringify(satislar));fbYaz("satislar",satislar);}
+async function firebasdenYukle(){const u=await fbOku("urunler");const s=await fbOku("satislar");if(u&&Array.isArray(u)&&u.length>0){urunler=u;localStorage.setItem("hpro_urunler",JSON.stringify(u));}if(s&&Array.isArray(s)){satislar=s;localStorage.setItem("hpro_satislar",JSON.stringify(s));}renderMain();goster("Veriler buluttan yüklendi ✓");}
 let urunler=loadUrunler(), satislar=loadSatislar();
 let sekme="stok", arama="", katFiltre="Tümü";
 
@@ -627,6 +631,7 @@ function barkodBulundu(kod){
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 renderMain();
+firebasdenYukle();
 </script>
 </body>
 </html>
