@@ -414,8 +414,12 @@ function renderSatis(){
   const opts=urunler.filter(u=>u.stok>0).map(u=>`<option value="${u.id}">${u.ad} — ${para(u.fiyat)}/${u.birim} (stok:${u.stok})</option>`).join("");
   return`<div class="satis-form">
     <h3>💳 Hızlı Satış</h3>
-    <div class="field"><label>Ürün</label><select id="satisUrun" onchange="satisHesapla()"><option value="">Ürün seçin...</option>${opts}</select></div>
-    <div class="field"><label>Miktar</label><input type="number" id="satisMiktar" value="1" min="1" oninput="satisHesapla()"/></div>
+    <div class="field"><label>Ürün</label><select id="satisUrun" onchange="satisUrunSecildi()"><option value="">Ürün seçin...</option>${opts}</select></div>
+    <div class="field-row">
+      <div class="field"><label>Miktar</label><input type="number" id="satisMiktar" value="1" min="1" oninput="satisHesapla()"/></div>
+      <div class="field"><label>Satış Fiyatı (₺)</label><input type="number" id="satisFiyat" value="0" min="0" step="0.01" oninput="satisHesapla()"/></div>
+    </div>
+    <div style="font-size:11px;color:#6677aa;margin-bottom:8px;margin-top:-6px">💡 Fiyatı değiştirerek farklı fiyattan satış yapabilirsiniz</div>
     <label style="font-size:11px;color:#8899cc;font-weight:500;display:block;margin-bottom:6px">Ödeme Tipi</label>
     <div class="satis-tip-row">
       <button class="satis-tip-btn${satisTip==="nakit"?" active":""}" onclick="setSatisTip('nakit')">💵 Nakit</button>
@@ -428,31 +432,40 @@ function renderSatis(){
   </div>`;
 }
 function setSatisTip(t){satisTip=t;renderMain();}
+function satisUrunSecildi(){
+  const uid=document.getElementById("satisUrun")?.value;
+  const u=urunler.find(x=>x.id===uid);
+  if(u){const el=document.getElementById("satisFiyat");if(el)el.value=u.fiyat;}
+  satisHesapla();
+}
 function satisHesapla(){
   const uid=document.getElementById("satisUrun")?.value;
   const m=parseFloat(document.getElementById("satisMiktar")?.value)||0;
+  const f=parseFloat(document.getElementById("satisFiyat")?.value)||0;
   const u=urunler.find(x=>x.id===uid);
-  const kar=u&&u.gelisFiyat?(u.fiyat-u.gelisFiyat)*m:0;
-  document.getElementById("satisTutar").innerHTML=u&&m>0
-    ?`Tutar: <b>${para(u.fiyat*m)}</b>${kar>0?` • Kâr: <span style="color:#4ade80">${para(kar)}</span>`:""}`
+  const kar=u&&u.gelisFiyat?(f-u.gelisFiyat)*m:0;
+  document.getElementById("satisTutar").innerHTML=u&&m>0&&f>0
+    ?`Tutar: <b>${para(f*m)}</b>${kar!==0?` • Kâr: <span style="color:${kar>=0?"#4ade80":"#ff6b6b"}">${para(kar)}</span>`:""}`
     :"Tutar: —";
 }
 function satisYap(){
   const uid=document.getElementById("satisUrun").value;
   const m=parseFloat(document.getElementById("satisMiktar").value)||0;
+  const f=parseFloat(document.getElementById("satisFiyat").value)||0;
   const u=urunler.find(x=>x.id===uid);
   if(!u){goster("Ürün seçin!","hata");return;}
   if(m<=0){goster("Geçersiz miktar","hata");return;}
+  if(f<=0){goster("Fiyat girin!","hata");return;}
   if(u.stok<m){goster("Yetersiz stok!","hata");return;}
   if(satisTip==="veresiye"){
     const musteriAd=document.getElementById("musteriAd")?.value?.trim();
     if(!musteriAd){goster("Müşteri adı girin!","hata");return;}
-    veresiyeler=[{id:Date.now().toString(),musteriAd,urunAd:u.ad,miktar:m,birim:u.birim,fiyat:u.fiyat,tutar:u.fiyat*m,tarih:new Date().toISOString(),odendi:false},...veresiyeler];
+    veresiyeler=[{id:Date.now().toString(),musteriAd,urunAd:u.ad,miktar:m,birim:u.birim,fiyat:f,tutar:f*m,tarih:new Date().toISOString(),odendi:false},...veresiyeler];
     saveVeresiyeler();
   }
-  const kar=u.gelisFiyat?(u.fiyat-u.gelisFiyat)*m:0;
+  const kar=u.gelisFiyat?(f-u.gelisFiyat)*m:0;
   urunler=urunler.map(x=>x.id===uid?{...x,stok:x.stok-m}:x);
-  satislar=[{id:Date.now().toString(),urunId:u.id,urunAd:u.ad,miktar:m,birim:u.birim,fiyat:u.fiyat,toplam:u.fiyat*m,kar,tip:satisTip,tarih:new Date().toISOString()},...satislar];
+  satislar=[{id:Date.now().toString(),urunId:u.id,urunAd:u.ad,miktar:m,birim:u.birim,fiyat:f,toplam:f*m,kar,tip:satisTip,tarih:new Date().toISOString()},...satislar];
   saveUrunler();saveSatislar();
   goster(`${u.ad} — ${m} ${u.birim} satıldı ✓`);
   renderMain();
@@ -517,10 +530,37 @@ function renderGecmis(){
   if(satislar.length===0)return`<div class="gecmis-header"><h3>Satış Geçmişi</h3></div><div class="empty"><div class="empty-icon">📋</div></div>`;
   const tipBadge={nakit:'<span class="satis-tip-badge tip-nakit">💵 Nakit</span>',pos:'<span class="satis-tip-badge tip-pos">💳 POS</span>',veresiye:'<span class="satis-tip-badge tip-veresiye">📒 Veresiye</span>'};
   return`<div class="gecmis-header"><h3>Satış Geçmişi</h3><span>${satislar.length} kayıt</span></div>
-    ${satislar.map(s=>`<div class="satis-kart">
+    ${satislar.map(s=>`<div class="satis-kart" onclick="satisDetay('${s.id}')">
       <div><div class="satis-ad">${s.urunAd}</div><div class="satis-tarih">${tarih(s.tarih)}</div>${tipBadge[s.tip]||""}</div>
       <div><div class="satis-tutar">${para(s.toplam)}</div><div class="satis-detay">${s.miktar} ${s.birim} × ${para(s.fiyat)}</div>${s.kar>0?`<div class="satis-detay" style="color:#4ade80">Kâr: ${para(s.kar)}</div>`:""}</div>
     </div>`).join("")}`;
+}
+
+function satisDetay(id){
+  const s=satislar.find(x=>x.id===id);if(!s)return;
+  const tipBadge={nakit:'💵 Nakit',pos:'💳 POS',veresiye:'📒 Veresiye'};
+  openModal("Satış Detayı",`
+    <div style="background:#002060;border-radius:12px;padding:14px;margin-bottom:14px">
+      <div style="font-weight:700;font-size:15px;color:#ffd700;margin-bottom:8px">${s.urunAd}</div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:12px;color:#8899cc">Tarih</span><span style="font-size:12px;color:#e8eaf0">${tarih(s.tarih)}</span></div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:12px;color:#8899cc">Miktar</span><span style="font-size:12px;color:#e8eaf0">${s.miktar} ${s.birim}</span></div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:12px;color:#8899cc">Birim Fiyat</span><span style="font-size:12px;color:#e8eaf0">${para(s.fiyat)}</span></div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:12px;color:#8899cc">Toplam</span><span style="font-size:13px;font-weight:700;color:#ffd700">${para(s.toplam)}</span></div>
+      ${s.kar?`<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:12px;color:#8899cc">Kâr</span><span style="font-size:13px;font-weight:700;color:#4ade80">${para(s.kar)}</span></div>`:""}
+      <div style="display:flex;justify-content:space-between"><span style="font-size:12px;color:#8899cc">Ödeme</span><span style="font-size:12px;color:#e8eaf0">${tipBadge[s.tip]||s.tip}</span></div>
+    </div>
+    <button onclick="satisIptal('${s.id}')" style="width:100%;padding:13px;border-radius:12px;border:2px solid #7f1d1d;color:#fca5a5;background:rgba(127,29,29,0.2);font-size:14px;font-weight:700">🗑️ Satışı İptal Et (Stok Geri Gelir)</button>
+    <div style="font-size:11px;color:#6677aa;text-align:center;margin-top:8px">İptal edilince stok iade edilir</div>
+  `);
+}
+function satisIptal(id){
+  if(!confirm("Satış iptal edilsin mi? Stok geri gelecek."))return;
+  const s=satislar.find(x=>x.id===id);if(!s)return;
+  urunler=urunler.map(u=>u.id===s.urunId?{...u,stok:u.stok+s.miktar}:u);
+  satislar=satislar.filter(x=>x.id!==id);
+  saveUrunler();saveSatislar();
+  goster("Satış iptal edildi, stok iade edildi ✓");
+  closeModal();renderMain();
 }
 
 // ─── VERESİYE ─────────────────────────────────────────────────────────────────
